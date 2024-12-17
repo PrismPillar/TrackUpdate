@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# Display usage instructions if -h or --help is used, or if no arguments are provided
+if [[ "$1" == "-h" || "$1" == "--help" || "$#" -lt 1 ]]; then
+    echo "Usage: vas <[optional] no_of_audio no_of_subtitle> <new_metadata_name>"
+    echo "Examples:"
+    echo "  vas 0204 'New Title'     # Sets title to 'New Title' with 2 audio and 4 subtitle tracks"
+    echo "  vas 'New Title'          # Sets title to 'New Title' with default 4 audio and 40 subtitle tracks"
+    exit 0
+fi
+
+# Set default values
+audio_tracks=4
+subtitle_tracks=40
+new_metadata_name=""
+
+# Check if the first argument is a number (indicating track counts)
+if [[ "$1" =~ ^[0-9]+$ ]]; then
+    # Extract the number of audio and subtitle tracks from the first argument
+    audio_tracks="${1:0:2}"       # First 2 digits for audio tracks
+    subtitle_tracks="${1:2:2}"    # Next 2 digits for subtitle tracks
+
+    # Shift arguments to get the new metadata name
+    shift
+fi
+
+# Combine remaining arguments into the new metadata name (handling spaces and special characters)
+new_metadata_name="$*"
+
+# Validate that a metadata name was provided
+if [ -z "$new_metadata_name" ]; then
+    echo "Error: No metadata name provided."
+    exit 1
+fi
+
+# Update metadata for each MKV file in the current folder and its subfolders
+find . -type f -name "*.mkv" | while read -r file; do
+    echo "Updating metadata for $file to '$new_metadata_name'"
+
+    # Set the video title to the new name
+    mkvpropedit "$file" --edit info --set "title=$new_metadata_name"
+
+    # Update names for the specified number of audio tracks
+    for ((i=1; i<=audio_tracks; i++)); do
+        mkvpropedit "$file" --edit track:a$i --set "name=$new_metadata_name Audio $i"
+    done
+
+    # Update names for the specified number of subtitle tracks
+    for ((i=1; i<=subtitle_tracks; i++)); do
+        mkvpropedit "$file" --edit track:s$i --set "name=$new_metadata_name Subtitle $i"
+    done
+done
+
+echo "All MKV metadata names updated to: $new_metadata_name with $audio_tracks audio tracks and $subtitle_tracks subtitle tracks."
