@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# Display usage instructions
+show_help() {
+    echo "Batch Metadata Editor for MKV Files - vas"
+    echo
+    echo "Usage: vas [options] <audio_tracks> <subtitle_tracks> <new_metadata_name>"
+    echo
+    echo "Options:"
+    echo "  -h, --help         Show this help message."
+    echo "  --non-recursive    Process only the current directory."
+    echo
+    echo "Examples:"
+    echo "  vas 3 3 New Title  # Updates metadata for 3 audio and 3 subtitle tracks."
+    echo "  vas 2 1 'TG/@SyrusFlix'  # Updates metadata for 2 audio and 1 subtitle track."
+    exit 0
+}
+
+# Default values
+audio_tracks=0
+subtitle_tracks=0
+new_metadata_name=""
+recursive=true
+
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        -h|--help) show_help ;;
+        --non-recursive) recursive=false ;;
+        [0-9]*) 
+            audio_tracks="$1"
+            shift
+            subtitle_tracks="$1"
+            shift ;;
+        *) 
+            new_metadata_name="$*"
+            break ;;
+    esac
+done
+
+# Validate inputs
+if [[ -z "$new_metadata_name" || $audio_tracks -le 0 || $subtitle_tracks -le 0 ]]; then
+    echo "Error: Please provide audio_tracks, subtitle_tracks, and metadata name."
+    show_help
+fi
+
+# Process files
+process_files() {
+    local path="."
+    [ "$recursive" == true ] && path="." || path="*"
+
+    find "$path" -type f -name "*.mkv" | while read -r file; do
+        echo "Processing: $file"
+
+        # Set the video file title
+        mkvpropedit "$file" --edit info --set "title=$new_metadata_name"
+
+        # Update the video track name
+        mkvpropedit "$file" --edit track:v1 --set "name=$new_metadata_name" &>/dev/null || \
+            echo "Warning: Video track not found in $file."
+
+        # Update audio tracks
+        for ((i = 1; i <= audio_tracks; i++)); do
+            mkvpropedit "$file" --edit track:a$i --set "name=$new_metadata_name" &>/dev/null || \
+                echo "Warning: Audio track $i not found in $file."
+        done
+
+        # Update subtitle tracks
+        for ((i = 1; i <= subtitle_tracks; i++)); do
+            mkvpropedit "$file" --edit track:s$i --set "name=$new_metadata_name" &>/dev/null || \
+                echo "Warning: Subtitle track $i not found in $file."
+        done
+
+        echo "Metadata updated for $file."
+    done
+}
+
+# Run the process
+process_files
+
+echo "Operation completed."
